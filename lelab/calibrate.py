@@ -38,6 +38,7 @@ from lerobot.teleoperators import (
 )
 from lerobot.utils.utils import init_logging
 
+from .sim import make_device_from_config as make_sim_device_from_config, sim_enabled
 from .utils.devices import safe_disconnect_device
 
 logger = logging.getLogger(__name__)
@@ -288,7 +289,10 @@ class CalibrationManager:
             self._update_status(status="connecting", message="Connecting to device...")
 
             # Create and connect device
-            if request.device_type == "robot":
+            if sim_enabled():
+                logger.info("[sim] calibrating a simulated device")
+                self.device = make_sim_device_from_config(config)
+            elif request.device_type == "robot":
                 self.device = make_robot_from_config(config)
             else:
                 self.device = make_teleoperator_from_config(config)

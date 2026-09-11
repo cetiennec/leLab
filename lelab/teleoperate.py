@@ -23,6 +23,7 @@ from pydantic import BaseModel
 from lerobot.robots.so_follower import SO101Follower, SO101FollowerConfig
 from lerobot.teleoperators.so_leader import SO101Leader, SO101LeaderConfig
 
+from .sim import make_follower as sim_make_follower, make_leader as sim_make_leader, sim_enabled
 from .utils.config import setup_calibration_files
 from .utils.devices import safe_disconnect_device
 
@@ -156,8 +157,13 @@ def handle_start_teleoperation(request: TeleoperateRequest, websocket_manager=No
         # other (so its serial port is released) and report the error — do NOT
         # leave the caller thinking teleoperation started.
         logger.info("Initializing robot and teleop device...")
-        robot = SO101Follower(robot_config)
-        teleop_device = SO101Leader(teleop_config)
+        if sim_enabled():
+            logger.info("[sim] teleoperating simulated arms")
+            robot = sim_make_follower(robot_config)
+            teleop_device = sim_make_leader(teleop_config)
+        else:
+            robot = SO101Follower(robot_config)
+            teleop_device = SO101Leader(teleop_config)
 
         # Connect each arm separately so the error names which one failed and
         # tells the user what to do, instead of a generic "failed to start".

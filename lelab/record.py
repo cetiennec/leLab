@@ -32,6 +32,7 @@ from lerobot.scripts.lerobot_record import RecordConfig
 from lerobot.teleoperators.so_leader import SO101LeaderConfig
 
 from .dataset_repair import DatasetRepairError, repair_local_dataset
+from .sim import make_follower as sim_make_follower, make_leader as sim_make_leader, sim_enabled
 from .utils.config import setup_calibration_files, with_lelab_tag
 from .utils.devices import safe_disconnect_device
 
@@ -325,7 +326,7 @@ def handle_start_recording(request: RecordingRequest) -> dict[str, Any]:
 
                 # Give the frontend's camera streams time to release the
                 # underlying devices before lerobot tries to open them.
-                if request.cameras:
+                if request.cameras and not sim_enabled():
                     logger.info(
                         "Waiting for camera resources to be released (cameras: %s)",
                         list(request.cameras.keys()),
@@ -712,8 +713,13 @@ def record_with_web_events(cfg: RecordConfig, web_events: dict, settling_time_s:
 
     global current_phase, phase_start_time, current_episode, saved_episodes, current_robot
 
-    robot = make_robot_from_config(cfg.robot)
-    teleop = make_teleoperator_from_config(cfg.teleop) if cfg.teleop is not None else None
+    if sim_enabled():
+        logger.info("[sim] recording from simulated arms and cameras")
+        robot = sim_make_follower(cfg.robot)
+        teleop = sim_make_leader(cfg.teleop) if cfg.teleop is not None else None
+    else:
+        robot = make_robot_from_config(cfg.robot)
+        teleop = make_teleoperator_from_config(cfg.teleop) if cfg.teleop is not None else None
 
     teleop_action_processor, robot_action_processor, robot_observation_processor = make_default_processors()
 

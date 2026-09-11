@@ -330,6 +330,19 @@ def _monitor_processes(processes: Sequence[tuple[str, subprocess.Popen]]) -> Non
                 raise SystemExit(returncode)
 
 
+def _enable_sim_mode() -> None:
+    """Turn on simulated hardware for this process and any child it spawns.
+
+    Set in `os.environ` rather than passed down as an argument because the
+    backend may run in a subprocess (`--dev`) or a uvicorn reload worker, and
+    every feature module reads the flag lazily via `lelab.sim.sim_enabled()`.
+    """
+    from lelab.sim import SIM_ENV_VAR
+
+    os.environ[SIM_ENV_VAR] = "1"
+    logger.info("Simulation mode: no robot is required; arms and cameras are faked.")
+
+
 def _run_prod(*, no_open: bool = False, rebuild: bool = False) -> None:
     """Serve built frontend from backend on a single port."""
     _ensure_port_available("Backend", BACKEND_PORT)
@@ -459,6 +472,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Do not open a browser automatically.",
     )
     parser.add_argument(
+        "--sim",
+        action="store_true",
+        help="Simulate the SO-101 arms and cameras so the interface can be used with no hardware.",
+    )
+    parser.add_argument(
         "--stop",
         action="store_true",
         help="Stop a running LeLab (free ports 8000/8080) and exit.",
@@ -473,6 +491,9 @@ def main(argv: Sequence[str] | None = None) -> None:
     if args.stop:
         _run_stop()
         return
+
+    if args.sim:
+        _enable_sim_mode()
 
     if args.dev and args.rebuild:
         parser.error("--rebuild is for production mode; dev mode serves from Vite.")

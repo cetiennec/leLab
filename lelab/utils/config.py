@@ -165,6 +165,13 @@ def setup_follower_calibration_file(follower_config: str):
 
 def find_available_ports():
     """Find all available serial ports on the system"""
+    from ..sim import SIM_PORTS, sim_enabled
+
+    if sim_enabled():
+        # Sim mode owns the port list outright: mixing in the host's real
+        # /dev/tty* entries would let the user pick a port no fake arm answers on.
+        return list(SIM_PORTS)
+
     try:
         from serial.tools import list_ports  # Part of pyserial library
     except ImportError as exc:
@@ -219,6 +226,17 @@ def detect_port_after_disconnect(ports_before, timeout_s: float = 15.0, poll_int
     Raises:
         OSError: If the timeout elapses with no change, or more than one port disappears.
     """
+    from ..sim import SIM_PORTS, sim_enabled
+
+    if sim_enabled():
+        # Nothing can be unplugged, so stand in for the user pulling the cable:
+        # pause long enough for the frontend's "disconnect it now" step to be
+        # visible, then hand back a sim port.
+        time.sleep(1.5)
+        port = next((p for p in ports_before if p in SIM_PORTS), SIM_PORTS[0])
+        logger.info(f"[sim] detected port: {port}")
+        return port
+
     before_set = set(ports_before)
     deadline = time.monotonic() + timeout_s
     last_diff: list = []

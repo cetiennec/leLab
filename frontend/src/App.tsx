@@ -14,6 +14,7 @@ import EditDataset from "@/pages/EditDataset";
 import Upload from "@/pages/Upload";
 
 import NotFound from "@/pages/NotFound";
+import SimModeBadge from "@/components/SimModeBadge";
 import SingleTabGuard from "@/components/SingleTabGuard";
 import TeleopStopNotice from "@/components/TeleopStopNotice";
 import UpdateNotice from "@/components/UpdateNotice";
@@ -36,6 +37,7 @@ function App() {
                   <BrowserRouter>
                     <SingleTabGuard>
                       <OnboardingProvider>
+                        <SimModeBadge />
                         <TeleopStopNotice />
                         <UpdateNotice />
                         <Routes>

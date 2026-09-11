@@ -76,6 +76,18 @@ lelab --dev
 
 Vite on `:8080`, uvicorn `--reload` on `:8000`.
 
+No arms on your desk? Add `--sim` (on its own or with `--dev`) to run against a
+simulated SO-101 pair:
+
+```bash
+lelab --dev --sim
+```
+
+The port pickers list fake ports, calibration, teleoperation and recording all
+run their normal code paths against sine-driven joints and synthetic camera
+frames, and a recording writes a real LeRobot dataset. A **SIMULATION** badge
+sits in the corner of the UI so simulated data is never mistaken for a robot's.
+
 For frontend changes, use Node.js 22 and rebuild the bundle before submitting your PR:
 
 ```bash

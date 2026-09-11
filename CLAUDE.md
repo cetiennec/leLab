@@ -23,6 +23,7 @@ Run servers (entry point defined in [pyproject.toml](pyproject.toml)):
 ```bash
 lelab          # uvicorn on :8000, serves built frontend at /, opens browser
 lelab --dev    # spawns Vite dev (:8080) + uvicorn --reload (:8000), opens browser to :8080
+lelab --sim    # simulated SO-101 arms + cameras; combines with --dev
 ```
 
 Frontend PRs must include the rebuilt `frontend/dist/` bundle: use Node.js 22 and run `cd frontend && npm ci && npm run build`, then commit `dist/` alongside the source changes. The required [Quality workflow](.github/workflows/quality.yml) rebuilds and rejects stale bundles before merge. `lelab --dev` serves directly from Vite, so development itself needs no rebuild.
@@ -40,6 +41,7 @@ Run the Python tests with `pytest` (config in [pyproject.toml](pyproject.toml); 
 - [calibrate.py](lelab/calibrate.py) — step-by-step web calibration with a `CalibrationManager` singleton and `_step_complete` threading.Event.
 - [train.py](lelab/train.py) — wraps the LeRobot training CLI as a subprocess (psutil for lifecycle, queue for log streaming).
 - [dataset_repair.py](lelab/dataset_repair.py) — rebuilds `meta/episodes/` for a recording interrupted before `LeRobotDataset.finalize()` ran. Without an episode index LeRobot reads a local dataset as "not downloaded yet" and fetches it from the Hub, which 404s for a dataset that was never pushed. Call `repair_local_dataset(repo_id)` before opening a recorded dataset with `LeRobotDataset`.
+- [sim.py](lelab/sim.py) — simulated hardware for `lelab --sim` (env `LELAB_SIM=1`). `SimFollower`/`SimLeader` **subclass** the real `SO101Follower`/`SO101Leader` and swap in a sine-driven `SimBus` and synthetic `SimCamera`s — the subclassing is load-bearing, since `record_loop` branches on `isinstance(teleop, Teleoperator)` and records an empty episode when that fails. Everything built on the bus (`get_observation`, `send_action`, `configure`, calibration files) is LeRobot's own code. Feature modules branch on `sim_enabled()` at *device construction only* — calibration, teleoperation, the record phase machine and the dataset write run their real code paths. Also swaps `find_available_ports`/`detect_port_after_disconnect` for fake ports and `/available-cameras` for fake cameras; `/health` reports `sim_mode` so the frontend can badge the UI. **When you add a feature that constructs a robot, add a `sim_enabled()` branch there too.**
 - [utils/config.py](lelab/utils/config.py) — shared paths and persistence: calibration JSON, saved ports, saved config selections. **Import shared constants from here, do not hardcode paths in feature modules.**
 
 ### State model

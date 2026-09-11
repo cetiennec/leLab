@@ -67,6 +67,7 @@ from .rollout import (
     handle_start_inference,
     handle_stop_inference,
 )
+from .sim import sim_cameras, sim_enabled
 
 # Import our custom teleoperation functionality
 from .teleoperate import (
@@ -354,8 +355,17 @@ def inference_status():
 
 @app.get("/health")
 def health_check():
-    """Simple health check endpoint to verify server is running"""
-    return {"status": "ok", "message": "FastAPI server is running"}
+    """Simple health check endpoint to verify server is running.
+
+    Also reports whether this process runs against simulated hardware, so the
+    frontend can badge the UI instead of letting a developer mistake sine-wave
+    joint data for a real arm.
+    """
+    return {
+        "status": "ok",
+        "message": "FastAPI server is running",
+        "sim_mode": sim_enabled(),
+    }
 
 
 @app.get("/hf-auth-status")
@@ -1090,6 +1100,9 @@ def get_available_cameras():
     match" with an empty device_id (issues #12, #16).
     """
     try:
+        if sim_enabled():
+            return {"status": "success", "cameras": sim_cameras()}
+
         import platform
 
         system = platform.system()
