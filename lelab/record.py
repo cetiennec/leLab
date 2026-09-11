@@ -208,6 +208,46 @@ def create_record_config(request: RecordingRequest) -> RecordConfig:
     return record_config
 
 
+# Namespace given to a dataset whose repo_id arrives without one. The frontend
+# sends a bare name only when the user is signed out (signed in, it prefixes the
+# Hub username), so no lookup is needed to know which case this is — and the
+# start path must not make a network call anyway: it runs before the response,
+# so a slow Hub request would hang the "Starting recording session..." screen.
+# It is only a local directory name; pushing later signs in and files the
+# dataset under the user's own namespace.
+LOCAL_NAMESPACE = "local"
+
+
+def normalize_dataset_repo_id(repo_id: str, *, resume: bool) -> str:
+    """Turn the client's dataset name into the id the recording will use.
+
+    Three steps, all of which a recording fails without:
+
+    1. **Namespace.** LeRobot splits the repo_id on "/" unconditionally
+       (`sanity_check_dataset_name` does `_, name = repo_id.split("/")`), so a
+       bare name dies with "not enough values to unpack". The frontend sends a
+       bare name only when the user is signed out, so `local/` is the right
+       owner — and no Hub lookup is needed to know that, which matters because
+       this runs before the start response and must never block on the network.
+    2. **Sanitize.** HF repo names allow only [A-Za-z0-9._-]; anything else
+       would have push_to_hub reject the finished recording.
+    3. **Timestamp.** Matches the lerobot-record CLI, so each session lands in
+       its own directory. Skipped when resuming an existing dataset.
+    """
+    if not repo_id:
+        return repo_id
+
+    if "/" not in repo_id:
+        repo_id = f"{LOCAL_NAMESPACE}/{repo_id}"
+
+    namespace, name = repo_id.split("/", 1)
+    repo_id = f"{namespace}/{re.sub(r'[^A-Za-z0-9._-]', '_', name)}"
+
+    if not resume:
+        repo_id = f"{repo_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    return repo_id
+
+
 def handle_start_recording(request: RecordingRequest) -> dict[str, Any]:
     """Handle start recording request by using the existing record() function"""
     global \
@@ -247,21 +287,7 @@ def handle_start_recording(request: RecordingRequest) -> dict[str, Any]:
         last_recording_info = None
 
     try:
-        # Sanitize the dataset name so push_to_hub never rejects a finished
-        # recording over an invalid character. HF repo names allow only
-        # [A-Za-z0-9._-]; everything else becomes "_".
-        if request.dataset_repo_id:
-            if "/" in request.dataset_repo_id:
-                namespace, name = request.dataset_repo_id.split("/", 1)
-                name = re.sub(r"[^A-Za-z0-9._-]", "_", name)
-                request.dataset_repo_id = f"{namespace}/{name}"
-            else:
-                request.dataset_repo_id = re.sub(r"[^A-Za-z0-9._-]", "_", request.dataset_repo_id)
-        # Stamp the repo_id with a timestamp (matches lerobot-record CLI behavior),
-        # so each session lands in a unique directory and the frontend gets the
-        # final id back in the response and status payload.
-        if not request.resume and request.dataset_repo_id:
-            request.dataset_repo_id = f"{request.dataset_repo_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        request.dataset_repo_id = normalize_dataset_repo_id(request.dataset_repo_id, resume=request.resume)
 
         logger.info(f"Starting recording for dataset: {request.dataset_repo_id}")
         logger.info(f"Task: {request.single_task}")

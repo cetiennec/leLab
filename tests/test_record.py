@@ -119,3 +119,41 @@ def test_build_camera_configs_skips_non_opencv_type() -> None:
     configs = _build_camera_configs(cameras, Cv2Backends.ANY)
 
     assert configs == {}
+
+
+def test_normalize_repo_id_adds_a_namespace_when_signed_out() -> None:
+    """A namespace-less repo_id crashes LeRobot's `_, name = repo_id.split("/")`,
+    so a signed-out recording has to be filed under a local namespace."""
+    from lelab.record import LOCAL_NAMESPACE, normalize_dataset_repo_id
+
+    result = normalize_dataset_repo_id("my_dataset", resume=False)
+
+    assert result.startswith(f"{LOCAL_NAMESPACE}/my_dataset_")
+
+
+def test_normalize_repo_id_keeps_an_existing_namespace() -> None:
+    from lelab.record import normalize_dataset_repo_id
+
+    result = normalize_dataset_repo_id("someone/my_dataset", resume=False)
+
+    assert result.startswith("someone/my_dataset_")
+
+
+def test_normalize_repo_id_sanitizes_only_the_name() -> None:
+    from lelab.record import normalize_dataset_repo_id
+
+    result = normalize_dataset_repo_id("someone/my dataset!", resume=True)
+
+    assert result == "someone/my_dataset_"
+
+
+def test_normalize_repo_id_skips_the_timestamp_when_resuming() -> None:
+    from lelab.record import normalize_dataset_repo_id
+
+    assert normalize_dataset_repo_id("someone/my_dataset", resume=True) == "someone/my_dataset"
+
+
+def test_normalize_repo_id_passes_an_empty_id_through() -> None:
+    from lelab.record import normalize_dataset_repo_id
+
+    assert normalize_dataset_repo_id("", resume=False) == ""
