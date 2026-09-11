@@ -43,6 +43,7 @@ const Landing = () => {
   const [numEpisodes, setNumEpisodes] = useState(5);
   const [episodeTimeS, setEpisodeTimeS] = useState(60);
   const [resetTimeS, setResetTimeS] = useState(15);
+  const [settlingTimeS, setSettlingTimeS] = useState(5);
   const [streamingEncoding, setStreamingEncoding] = useState(true);
   const [cameras, setCameras] = useState<CameraConfig[]>([]);
 
@@ -207,6 +208,7 @@ const Landing = () => {
       num_episodes: numEpisodes,
       episode_time_s: episodeTimeS,
       reset_time_s: resetTimeS,
+      settling_time_s: settlingTimeS,
       fps: 30,
       video: true,
       push_to_hub: false,
@@ -313,6 +315,8 @@ const Landing = () => {
         setEpisodeTimeS={setEpisodeTimeS}
         resetTimeS={resetTimeS}
         setResetTimeS={setResetTimeS}
+        settlingTimeS={settlingTimeS}
+        setSettlingTimeS={setSettlingTimeS}
         streamingEncoding={streamingEncoding}
         setStreamingEncoding={setStreamingEncoding}
         cameras={cameras}

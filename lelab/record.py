@@ -50,7 +50,8 @@ recording_start_time = None  # Track when recording started
 session_end_elapsed_seconds = None  # Final session duration after the run ends
 current_episode = 1  # Track current episode number
 saved_episodes = 0  # Track how many episodes have been saved
-current_phase = "preparing"  # Track current phase: "preparing", "recording", "resetting", "completed"
+# Current phase: "preparing", "settling", "recording", "resetting", "completed"
+current_phase = "preparing"
 phase_start_time = None  # Track when current phase started
 last_recording_info: dict[str, Any] | None = (
     None  # Snapshot of the most recently completed dataset (for /dataset-info)
@@ -70,6 +71,9 @@ class RecordingRequest(BaseModel):
     num_episodes: int = 5
     episode_time_s: int = 30
     reset_time_s: int = 10
+    # Orange "get into position" window run right before each recording phase.
+    # No data is written during it. 0 disables it.
+    settling_time_s: int = 5
     fps: int = 30
     video: bool = True
     push_to_hub: bool = False
@@ -302,7 +306,9 @@ def handle_start_recording(request: RecordingRequest) -> dict[str, Any]:
                     )
                     time.sleep(2.0)
 
-                dataset = record_with_web_events(record_config, recording_events)
+                dataset = record_with_web_events(
+                    record_config, recording_events, settling_time_s=request.settling_time_s
+                )
                 logger.info(f"Recording completed successfully. Dataset has {dataset.num_episodes} episodes")
                 last_recording_info = {
                     "success": True,
@@ -387,7 +393,10 @@ def handle_exit_early() -> dict[str, Any]:
     # "user pressed skip" from "control_time_s elapsed naturally".
     recording_events["_exit_early_triggered"] = True
     logger.info("Exit early triggered (current phase: %s)", current_phase)
-    phase_name = "recording phase" if current_phase == "recording" else "reset phase"
+    phase_name = {
+        "recording": "recording phase",
+        "settling": "settling phase",
+    }.get(current_phase, "reset phase")
     return {
         "success": True,
         "message": f"Exit early triggered successfully for {phase_name}",
@@ -428,7 +437,7 @@ def handle_recording_status() -> dict[str, Any]:
 
     status = {
         "recording_active": recording_active,
-        "current_phase": current_phase,  # "preparing", "recording", "resetting", "completed"
+        "current_phase": current_phase,  # "preparing", "settling", "recording", "resetting", "completed"
         "session_ended": session_ended,  # New field to indicate session completion
         "available_controls": {
             "stop_recording": recording_active,  # ESC key replacement
@@ -482,6 +491,8 @@ def handle_recording_status() -> dict[str, Any]:
                 status["phase_time_limit_s"] = recording_config.episode_time_s
             elif current_phase == "resetting":
                 status["phase_time_limit_s"] = recording_config.reset_time_s
+            elif current_phase == "settling":
+                status["phase_time_limit_s"] = recording_config.settling_time_s
     elif session_end_elapsed_seconds is not None:
         status["session_elapsed_seconds"] = session_end_elapsed_seconds
 
@@ -655,7 +666,7 @@ def handle_upload_dataset(request: UploadRequest) -> dict[str, Any]:
         return {"success": False, "message": f"Failed to upload dataset: {str(e)}"}
 
 
-def record_with_web_events(cfg: RecordConfig, web_events: dict) -> LeRobotDataset:
+def record_with_web_events(cfg: RecordConfig, web_events: dict, settling_time_s: int = 0) -> LeRobotDataset:
     """
     Implement recording with phase tracking - exactly mirrors original record() function behavior
     """
@@ -783,6 +794,46 @@ def record_with_web_events(cfg: RecordConfig, web_events: dict) -> LeRobotDatase
         current_robot = robot
 
         while saved_episodes < cfg.dataset.num_episodes:
+            # SETTLING PHASE - teleoperation without dataset, so the user can
+            # bring the arm into its start pose before any frame is written.
+            # Same shape as the reset phase: exit_early skips it.
+            if settling_time_s > 0:
+                current_phase = "settling"
+                phase_start_time = time.time()
+                logger.info(f"Starting settling phase for episode {current_episode}")
+                print(
+                    f"🟠 STATUS CHANGE: Starting settling phase for episode {current_episode}/{cfg.dataset.num_episodes}"
+                )
+
+                log_say("Get ready", cfg.play_sounds)
+                web_events["exit_early"] = False
+
+                record_loop(
+                    robot=robot,
+                    events=web_events,
+                    fps=cfg.dataset.fps,
+                    teleop_action_processor=teleop_action_processor,
+                    robot_action_processor=robot_action_processor,
+                    robot_observation_processor=robot_observation_processor,
+                    teleop=teleop,
+                    # NOTE: no dataset — nothing is recorded during settling.
+                    control_time_s=settling_time_s,
+                    single_task=cfg.dataset.single_task,
+                    display_data=cfg.display_data,
+                )
+
+                if web_events["exit_early"]:
+                    logger.info("🟡 SETTLING PHASE INTERRUPTED BY EXIT_EARLY - starting recording")
+                    web_events["exit_early"] = False
+
+                if web_events["stop_recording"]:
+                    logger.info("🛑 STOP RECORDING requested during settling phase - ending session")
+                    print("🛑 STATUS CHANGE: Stop recording requested during settling - ending session")
+                    break
+
+                # A re-record request during settling has nothing to discard.
+                web_events["rerecord_episode"] = False
+
             # RECORDING PHASE - with dataset (matches original record.py exactly)
             current_phase = "recording"
             phase_start_time = time.time()

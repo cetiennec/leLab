@@ -38,6 +38,8 @@ interface RecordingModalProps {
   setEpisodeTimeS: (value: number) => void;
   resetTimeS: number;
   setResetTimeS: (value: number) => void;
+  settlingTimeS: number;
+  setSettlingTimeS: (value: number) => void;
   streamingEncoding: boolean;
   setStreamingEncoding: (value: boolean) => void;
   cameras: CameraConfig[];
@@ -60,6 +62,8 @@ const RecordingModal: React.FC<RecordingModalProps> = ({
   setEpisodeTimeS,
   resetTimeS,
   setResetTimeS,
+  settlingTimeS,
+  setSettlingTimeS,
   streamingEncoding,
   setStreamingEncoding,
   cameras,
@@ -229,6 +233,27 @@ const RecordingModal: React.FC<RecordingModalProps> = ({
                       }}
                       className="bg-gray-800 border-gray-700 text-white"
                     />
+                  </div>
+                  <div className="space-y-2">
+                    <Label
+                      htmlFor="settlingTimeS"
+                      className="text-sm font-medium text-gray-300"
+                    >
+                      Settling duration (seconds)
+                    </Label>
+                    <NumberInput
+                      id="settlingTimeS"
+                      min="0"
+                      value={settlingTimeS}
+                      onChange={(v) => {
+                        if (v !== undefined) setSettlingTimeS(v);
+                      }}
+                      className="bg-gray-800 border-gray-700 text-white"
+                    />
+                    <p className="text-xs text-gray-500">
+                      Time to get into position before each episode is recorded.
+                      Set to 0 to skip.
+                    </p>
                   </div>
                 </div>
               </div>
